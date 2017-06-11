@@ -5,6 +5,18 @@ from coalib.results.TextRange import TextRange
 from functools import lru_cache
 
 
+PY_DOC_REF = {
+    'module': (':mod:`', '`'),
+    'function': (':func:`', '`'),
+    'data': (':data:`', '`'),
+    'constant': (':const:`', '`'),
+    'class': (':class:`', '`'),
+    'method': (':meth:`', '`'),
+    'attribute': (':attr:`', '`'),
+    'exception': (':exc:`', '`'),
+    'object': (':obj:`', '`')}
+
+
 @generate_repr()
 @generate_eq('documentation', 'language', 'docstyle',
              'indent', 'marker', 'position')
@@ -17,6 +29,7 @@ class DocumentationComment:
     ExceptionValue = namedtuple('ExceptionValue', 'name, desc')
     ReturnValue = namedtuple('ReturnValue', 'desc')
     Description = namedtuple('Description', 'desc')
+    Reference = namedtuple('Reference', ['type_ref', 'ref_addr'])
     top_padding = 0
     bottom_padding = 0
     docstring_type = 'others'
@@ -80,10 +93,10 @@ class DocumentationComment:
         """
         if self.language == 'python' and self.docstyle == 'default':
             return self._parse_documentation_with_symbols(
-                (':param ', ':'), (':raises ', ':'), ':return:')
+                (':param ', ':'), (':raises ', ':'), ':return:', PY_DOC_REF)
         elif self.language == 'python' and self.docstyle == 'doxygen':
             return self._parse_documentation_with_symbols(
-                ('@param ', ' '), ('@raises ', ' '), '@return ')
+                ('@param ', ' '), ('@raises ', ' '), '@return ', PY_DOC_REF)
         elif self.language == 'java' and self.docstyle == 'default':
             return self._parse_documentation_with_symbols(
                 ('@param  ', ' '), ('@raises  ', ' '), '@return ')
@@ -98,7 +111,8 @@ class DocumentationComment:
     def _parse_documentation_with_symbols(self,
                                           param_identifiers,
                                           exception_identifiers,
-                                          return_identifiers):
+                                          return_identifiers,
+                                          ref_identifiers={}):
         """
         Parses documentation based on parameter, exception and return symbols.
 
@@ -113,6 +127,20 @@ class DocumentationComment:
             section is a named tuple of either ``Description``, ``Parameter``,
             ``ExceptionValue`` or ``ReturnValue``.
         """
+        def _reference_oocurs(line, ref_identifiers):
+            occurences = [] 
+            for ref_type in ref_identifiers.keys():
+                ref = line.find(ref_identifiers[ref_type][0])
+                if ref != -1:
+                    occurences.append((ref_type, ref))
+                else:
+                    continue
+            occurences.sort(key=lambda x: x[1])
+            return occurences
+
+
+
+
         lines = self.documentation.splitlines(keepends=True)
 
         parse_mode = self.Description
@@ -169,6 +197,16 @@ class DocumentationComment:
                 retval_desc = line[return_offset:]
                 parsed.append(self.ReturnValue(desc=retval_desc))
 
+            elif _reference_oocurs(line, ref_identifiers):
+                occurences = _reference_oocurs(line, ref_identifiers)
+                for ref, _ in occurences:
+                    splitted = line.split(ref_identifiers[ref][0],
+                        1)[1].split(ref_identifiers[ref][1], 1)
+                    addr = splitted[0].strip()
+                    line = splitted[1:][0]
+                    parsed.append(self.Reference(type_ref=ref, ref_addr=addr))
+
+
             # These conditions will take care if the parsed section
             # descriptions are not on the same line as that of it's
             # name. Further, adding the parsed section to the final list.
@@ -208,7 +246,6 @@ class DocumentationComment:
 
         This function just assembles the documentation comment
         itself, without the markers and indentation.
-
         >>> from coalib.bearlib.languages.documentation.DocumentationComment \
         ...     import DocumentationComment
         >>> from coalib.bearlib.languages.documentation.DocstyleDefinition \
@@ -266,7 +303,6 @@ class DocumentationComment:
     def assemble(self):
         """
         Assembles parsed documentation to the original documentation.
-
         This function assembles the whole documentation comment, with the
         given markers and indentation.
         """

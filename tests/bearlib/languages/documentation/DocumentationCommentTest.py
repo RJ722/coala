@@ -17,6 +17,7 @@ class DocumentationCommentTest(unittest.TestCase):
     Parameter = DocumentationComment.Parameter
     ExceptionValue = DocumentationComment.ExceptionValue
     ReturnValue = DocumentationComment.ReturnValue
+    Reference = DocumentationComment.Reference
 
     Metadata = DocstyleDefinition.Metadata
     ClassPadding = DocstyleDefinition.ClassPadding
@@ -141,6 +142,20 @@ class PythonDocumentationCommentTest(DocumentationCommentTest):
                ' :return: something2 ')
         expected = [self.ReturnValue(desc=' something1 \n'),
                     self.ReturnValue(desc=' something2 ')]
+        self.check_docstring(doc, expected)
+
+    def test_reference_default(self):
+        doc = ' A :class:` Foo.Bar.x` which does foo'
+        expected = [self.Reference(type_ref='class', ref_addr='Foo.Bar.x')]
+        self.check_docstring(doc, expected)
+
+    def test_multiple_references(self):
+        doc = ('There is a :class:`FooBar` which has a :const:`ONE` and a'
+            ' :meth:`TWO`. There is a funny :exc:`FunnyExc`.')
+        expected = [self.Reference(type_ref='class', ref_addr='FooBar'),
+                    self.Reference(type_ref='constant', ref_addr='ONE'),
+                    self.Reference(type_ref='method', ref_addr='TWO'),
+                    self.Reference(type_ref='exception', ref_addr='FunnyExc')]
         self.check_docstring(doc, expected)
 
     def test_python_default(self):
